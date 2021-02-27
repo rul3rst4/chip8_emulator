@@ -1,5 +1,6 @@
 #include <bits/stdc++.h>
 #include <cstdint>
+#include <SDL2/SDL.h>
 
 using namespace std;
 
@@ -8,10 +9,14 @@ const unsigned int FONTSET_START_ADDRESS = 0x50;
 const unsigned int DISPLAY_WIDTH = 64;
 const unsigned int DISPLAY_HEIGHT = 32;
 
+class Platform {
+ public:
+};
+
 struct Vec2b {
   uint8_t x;
   uint8_t y;
-}
+};
 
 class Rom {
  private:
@@ -297,88 +302,89 @@ class Chip8 {
             display[start_position.x + j][start_position.y + i] ^= 0xFFFFFFFF;
           }
         }
-      };
-      this->instructions[OpCode::SKP] = [&]() {
-        uint8_t regx = (opcode & 0x0F00u) >> 8u;
-        uint8_t key = get_register_value(regx);
+      }
+    };
+    this->instructions[OpCode::SKP] = [&]() {
+      uint8_t regx = (opcode & 0x0F00u) >> 8u;
+      uint8_t key = get_register_value(regx);
 
-        if (input_keys[key]) {
-          pg_next_instruction();
+      if (input_keys[key]) {
+        pg_next_instruction();
+      }
+    };
+    this->instructions[OpCode::SKNP] = [&]() {
+      uint8_t regx = (opcode & 0x0F00u) >> 8u;
+      uint8_t key = get_register_value(regx);
+
+      if (!input_keys[key]) {
+        pg_next_instruction();
+      }
+    };
+    this->instructions[OpCode::LD_Vx_DT] = [&]() {
+      uint8_t regx = (opcode & 0x0F00u) >> 8u;
+
+      m_registers[static_cast<Registers>(regx)] = delay_timer;
+    };
+    this->instructions[OpCode::LD_Vx_K] = [&]() {
+      uint8_t regx = (opcode & 0x0F00u) >> 8u;
+
+      int index = 0;
+      for (auto& [key, value] : input_keys) {
+        if (value) {
+          m_registers[get_register_enum(regx)] = (uint8_t)index;
+          return;
         }
-      };
-      this->instructions[OpCode::SKNP] = [&]() {
-        uint8_t regx = (opcode & 0x0F00u) >> 8u;
-        uint8_t key = get_register_value(regx);
+        index++;
+      }
+      pg_previous_instruction();
+    };
+    this->instructions[OpCode::LD_DT_Vx] = [&]() {
+      uint8_t regx = (opcode & 0x0F00u) >> 8u;
 
-        if (!input_keys[key]) {
-          pg_next_instruction();
-        }
-      };
-      this->instructions[OpCode::LD_Vx_DT] = [&]() {
-        uint8_t regx = (opcode & 0x0F00u) >> 8u;
+      delay_timer = m_registers[static_cast<Registers>(regx)];
+    };
+    this->instructions[OpCode::LD_ST_Vx] = [&]() {
+      uint8_t regx = (opcode & 0x0F00u) >> 8u;
 
-        m_registers[static_cast<Registers>(regx)] = delay_timer;
-      };
-      this->instructions[OpCode::LD_Vx_K] = [&]() {
-        uint8_t regx = (opcode & 0x0F00u) >> 8u;
+      sound_timer = m_registers[static_cast<Registers>(regx)];
+    };
+    this->instructions[OpCode::ADD_Vx_Vy] = [&]() {
+      uint8_t regx = (opcode & 0x0F00u) >> 8u;
 
-        int index = 0;
-        for (auto& [key, value] : input_keys) {
-          if (value) {
-            m_registers[get_register_enum(regx)] = (uint8_t)index;
-            return;
-          }
-          index++;
-        }
-        pg_previous_instruction();
-      };
-      this->instructions[OpCode::LD_DT_Vx] = [&]() {
-        uint8_t regx = (opcode & 0x0F00u) >> 8u;
+      index_register += m_registers[static_cast<Registers>(regx)];
+    };
+    this->instructions[OpCode::LD_F_Vx] = [&]() {
+      uint8_t regx = (opcode & 0x0F00u) >> 8u;
 
-        delay_timer = m_registers[static_cast<Registers>(regx)];
-      };
-      this->instructions[OpCode::LD_ST_Vx] = [&]() {
-        uint8_t regx = (opcode & 0x0F00u) >> 8u;
+      index_register = FONTSET_START_ADDRESS + (5 * get_register_value(regx));
+    };
+    this->instructions[OpCode::LD_B_Vx] = [&]() {
+      uint8_t regx = (opcode & 0x0F00u) >> 8u;
 
-        sound_timer = m_registers[static_cast<Registers>(regx)];
-      };
-      this->instructions[OpCode::ADD_Vx_Vy] = [&]() {
-        uint8_t regx = (opcode & 0x0F00u) >> 8u;
+      uint8_t reg_value = get_register_value(regx);
 
-        index_register += m_registers[static_cast<Registers>(regx)];
-      };
-      this->instructions[OpCode::LD_F_Vx] = [&]() {
-        uint8_t regx = (opcode & 0x0F00u) >> 8u;
+      memory[index_register + 2] = reg_value % 10;
+      reg_value /= 10;
+      memory[index_register + 1] = (reg_value % 10);
+      reg_value /= 10;
+      memory[index_register] = (reg_value % 10);
+    };
+    this->instructions[OpCode::LD_I_Vx] = [&]() {
+      uint8_t regx = (opcode & 0x0F00u) >> 8u;
 
-        index_register = FONTSET_START_ADDRESS + (5 * get_register_value(regx));
-      };
-      this->instructions[OpCode::LD_B_Vx] = [&]() {
-        uint8_t regx = (opcode & 0x0F00u) >> 8u;
+      for (uint8_t i = 0; i <= regx; i++) {
+        memory[index_register + i] = get_register_value(i);
+      }
+    };
+    this->instructions[OpCode::LD_Vx_I] = [&]() {
+      uint8_t regx = (opcode & 0x0F00u) >> 8u;
 
-        uint8_t reg_value = get_register_value(regx);
-
-        memory[index_register + 2] = reg_value % 10;
-        reg_value /= 10;
-        memory[index_register + 1] = (reg_value % 10);
-        reg_value /= 10;
-        memory[index_register] = (reg_value % 10);
-      };
-      this->instructions[OpCode::LD_I_Vx] = [&]() {
-        uint8_t regx = (opcode & 0x0F00u) >> 8u;
-
-        for (uint8_t i = 0; i <= regx; i++) {
-          memory[index_register + i] = get_register_value(i);
-        }
-      };
-      this->instructions[OpCode::LD_Vx_I] = [&]() {
-        uint8_t regx = (opcode & 0x0F00u) >> 8u;
-
-        for (uint8_t i = 0; i <= regx; i++) {
-          m_registers[get_register_enum(i)] = memory[index_register + i];
-        }
-      };
-    }
+      for (uint8_t i = 0; i <= regx; i++) {
+        m_registers[get_register_enum(i)] = memory[index_register + i];
+      }
+    };
   }
+
   inline Registers get_register_enum(uint8_t reg_value) { return static_cast<Registers>(reg_value); }
 
   inline uint8_t get_register_value(uint8_t reg_value) { return m_registers[static_cast<Registers>(reg_value)]; }
@@ -396,7 +402,7 @@ class Chip8 {
     cout << "Teste de final de arquivo" << endl;
   }
 
-  OpCode decode_op_code_and_execute() {
+  void decode_op_code_and_execute() {
     if (opcode > 0x00E0 && opcode < 0x00EE) {
       instructions[static_cast<OpCode>(opcode)]();
     } else if ((opcode >> 12) >= 0 && (opcode >> 12) <= 7) {
