@@ -36,41 +36,41 @@ class Rom {
 };
 
 enum class OpCode {
-  CLS,
-  RET,
-  SYS,
-  JP_Vx_addr,
-  JP_addr,
-  CALL,
-  SE_Vx_byte,
-  SE_Vx_Vy,
-  OR,
-  AND,
-  XOR,
-  SUB,
-  SHR,
-  SUBN,
-  SHL,
-  SNE_byte,
-  SNE_Vx_Vy,
-  RND,
-  DRW,
-  SKP,
-  SKNP,
-  ADD_byte,
-  ADD_Vx_Vy,
-  ADD_I_Vx,
-  LD_Vx_byte,
-  LD_Vx_Vy,
-  LD_I,
-  LD_Vx_DT,
-  LD_Vx_K,
-  LD_DT_Vx,
-  LD_ST_Vx,
-  LD_F_Vx,
-  LD_B_Vx,
-  LD_I_Vx,
-  LD_Vx_I,
+  CLS = 0x00E0,         // 00E0
+  RET = 0x00EE,         // 00EE
+  SYS = 0,              // 0nnn
+  JP_addr,              // 1nnn
+  CALL,                 // 2nnn
+  SE_Vx_byte,           // 3xkk
+  SNE_byte,             // 4xkk
+  SE_Vx_Vy,             // 5xy0
+  LD_Vx_byte,           // 6xkk
+  ADD_byte,             // 7xkk
+  LD_Vx_Vy = 0x8000,    // 8xy0
+  OR = 0x8001,          // 8xy1
+  AND = 0x8002,         // 8xy2
+  XOR = 0x8003,         // 8xy3
+  ADD_Vx_Vy = 0x8004,   // 8xy4
+  SUB = 0x8005,         // 8xy5
+  SHR = 0x8006,         // 8xy6
+  SUBN = 0x8007,        // 8xy7
+  SHL = 0x800E,         // 8xyE
+  SNE_Vx_Vy = 0x9000,   // 9xy0
+  LD_I = 0xA000,        // Annn
+  JP_Vx_addr = 0xB000,  // Bnnn
+  RND = 0xC000,         // Cxkk
+  DRW = 0xD000,         // Dxyn
+  SKP = 0xE09E,         // Ex9E
+  SKNP = 0xE0A1,        // ExA1
+  LD_Vx_DT = 0xF007,    // Fx07
+  LD_Vx_K = 0xF00A,     // Fx0A
+  LD_DT_Vx = 0xF015,    // Fx15
+  LD_ST_Vx = 0xF018,    // Fx18
+  ADD_I_Vx = 0xF01E,    // Fx1E
+  LD_F_Vx = 0xF029,     // Fx29
+  LD_B_Vx = 0xF033,     // Fx33
+  LD_I_Vx = 0xF055,     // Fx55
+  LD_Vx_I = 0xF065,     // Fx65
 };
 
 enum class Registers {
@@ -394,6 +394,34 @@ class Chip8 {
     }
 
     cout << "Teste de final de arquivo" << endl;
+  }
+
+  OpCode decode_op_code_and_execute() {
+    if (opcode > 0x00E0 && opcode < 0x00EE) {
+      instructions[static_cast<OpCode>(opcode)]();
+    } else if ((opcode >> 12) >= 0 && (opcode >> 12) <= 7) {
+      instructions[static_cast<OpCode>(opcode >> 12)]();
+    } else if ((opcode >> 12) >= 8 && (opcode >> 12) <= 0xD) {
+      instructions[static_cast<OpCode>(opcode & 0xF00F)]();
+    } else if ((opcode >> 12) >= 0xE && (opcode >> 12) <= 0xF) {
+      instructions[static_cast<OpCode>(opcode & 0xF0FF)]();
+    }
+  }
+
+  void Cicle() {
+    opcode = (memory[program_counter] << 8u) | memory[program_counter + 1];
+
+    pg_next_instruction();
+
+    decode_op_code_and_execute();
+
+    if (delay_timer > 0) {
+      delay_timer--;
+    }
+
+    if (sound_timer > 0) {
+      sound_timer--;
+    }
   }
 };
 
