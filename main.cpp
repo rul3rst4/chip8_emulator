@@ -6,11 +6,195 @@ using namespace std;
 
 const unsigned int START_ADDRESS = 0x200;
 const unsigned int FONTSET_START_ADDRESS = 0x50;
-const unsigned int DISPLAY_WIDTH = 64;
-const unsigned int DISPLAY_HEIGHT = 32;
+const uint8_t DISPLAY_WIDTH = 64;
+const uint8_t DISPLAY_HEIGHT = 32;
 
 class Platform {
  public:
+  Platform(char const* title, int windowWidth, int windowHeight, int textureWidth, int textureHeight) {
+    SDL_Init(SDL_INIT_VIDEO);
+
+    window = SDL_CreateWindow(title, 0, 0, windowWidth, windowHeight, SDL_WINDOW_SHOWN);
+
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
+    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, textureWidth, textureHeight);
+  }
+
+  ~Platform() {
+    SDL_DestroyTexture(texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+  }
+
+  void Update(void const* buffer, int pitch) {
+    SDL_UpdateTexture(texture, nullptr, buffer, pitch);
+    SDL_RenderClear(renderer);
+    SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+    SDL_RenderPresent(renderer);
+  }
+
+  bool ProcessInput(unordered_map<uint8_t, bool>& keys) {
+    bool quit = false;
+
+    SDL_Event event;
+
+    while (SDL_PollEvent(&event)) {
+      switch (event.type) {
+        case SDL_QUIT: {
+          quit = true;
+        } break;
+
+        case SDL_KEYDOWN: {
+          switch (event.key.keysym.sym) {
+            case SDLK_ESCAPE: {
+              quit = true;
+            } break;
+
+            case SDLK_x: {
+              keys[0] = 1;
+            } break;
+
+            case SDLK_1: {
+              keys[1] = 1;
+            } break;
+
+            case SDLK_2: {
+              keys[2] = 1;
+            } break;
+
+            case SDLK_3: {
+              keys[3] = 1;
+            } break;
+
+            case SDLK_q: {
+              keys[4] = 1;
+            } break;
+
+            case SDLK_w: {
+              keys[5] = 1;
+            } break;
+
+            case SDLK_e: {
+              keys[6] = 1;
+            } break;
+
+            case SDLK_a: {
+              keys[7] = 1;
+            } break;
+
+            case SDLK_s: {
+              keys[8] = 1;
+            } break;
+
+            case SDLK_d: {
+              keys[9] = 1;
+            } break;
+
+            case SDLK_z: {
+              keys[0xA] = 1;
+            } break;
+
+            case SDLK_c: {
+              keys[0xB] = 1;
+            } break;
+
+            case SDLK_4: {
+              keys[0xC] = 1;
+            } break;
+
+            case SDLK_r: {
+              keys[0xD] = 1;
+            } break;
+
+            case SDLK_f: {
+              keys[0xE] = 1;
+            } break;
+
+            case SDLK_v: {
+              keys[0xF] = 1;
+            } break;
+          }
+        } break;
+
+        case SDL_KEYUP: {
+          switch (event.key.keysym.sym) {
+            case SDLK_x: {
+              keys[0] = 0;
+            } break;
+
+            case SDLK_1: {
+              keys[1] = 0;
+            } break;
+
+            case SDLK_2: {
+              keys[2] = 0;
+            } break;
+
+            case SDLK_3: {
+              keys[3] = 0;
+            } break;
+
+            case SDLK_q: {
+              keys[4] = 0;
+            } break;
+
+            case SDLK_w: {
+              keys[5] = 0;
+            } break;
+
+            case SDLK_e: {
+              keys[6] = 0;
+            } break;
+
+            case SDLK_a: {
+              keys[7] = 0;
+            } break;
+
+            case SDLK_s: {
+              keys[8] = 0;
+            } break;
+
+            case SDLK_d: {
+              keys[9] = 0;
+            } break;
+
+            case SDLK_z: {
+              keys[0xA] = 0;
+            } break;
+
+            case SDLK_c: {
+              keys[0xB] = 0;
+            } break;
+
+            case SDLK_4: {
+              keys[0xC] = 0;
+            } break;
+
+            case SDLK_r: {
+              keys[0xD] = 0;
+            } break;
+
+            case SDLK_f: {
+              keys[0xE] = 0;
+            } break;
+
+            case SDLK_v: {
+              keys[0xF] = 0;
+            } break;
+          }
+        } break;
+      }
+    }
+
+    return quit;
+  }
+
+ private:
+  SDL_Window* window{};
+  SDL_Renderer* renderer{};
+  SDL_Texture* texture{};
 };
 
 struct Vec2b {
@@ -34,7 +218,7 @@ class Rom {
       if (in)
         data.push_back((uint8_t)c);
     }
-    return move(data);
+    return data;
     // https://stackoverflow.com/questions/17473753/c11-return-value-optimization-or-move/17473869#17473869
     // https://stackoverflow.com/questions/22655059/why-is-it-ok-to-return-a-vector-from-a-function
   }
@@ -110,7 +294,7 @@ class Chip8 {
   uint8_t sound_timer;
   unordered_map<uint8_t, bool> input_keys;
 
-  int display[DISPLAY_WIDTH][DISPLAY_HEIGHT];  // on is 0xFFFFFFFF and off is 0x00000000.
+  uint32_t display[DISPLAY_WIDTH * DISPLAY_HEIGHT];  // on is 0xFFFFFFFF and off is 0x00000000.
   uint16_t opcode;
   std::random_device rd;
   std::mt19937 mt;
@@ -139,7 +323,7 @@ class Chip8 {
  public:
   Chip8() : l_stack(16, 0), memory(0xFFF, 0), stack_pointer(0), program_counter(START_ADDRESS), mt(rd()), dist(0, 255U) {
     for (int i = 0; i < FONTSET_SIZE; i++) {
-      memory[FONTSET_START_ADDRESS + 1] = fontset[i];
+      memory[FONTSET_START_ADDRESS + i] = fontset[i];
     }
 
     for (int i = 0; i <= 15; i++) {
@@ -148,12 +332,11 @@ class Chip8 {
     for (int i = 0; i <= 15; i++) {
       input_keys[i] = false;
     }
-
-    this->instructions[OpCode::CLS] = [&]() {
-      for (int i = 0; i < DISPLAY_WIDTH; i++)
-        for (int j = 0; j < DISPLAY_HEIGHT; j++)
-          display[i][j] = 0;
-    };
+    init_instructions_umap();
+  }
+  ~Chip8() {}
+  void init_instructions_umap() {
+    this->instructions[OpCode::CLS] = [&]() { memset(display, 0, sizeof(display)); };
     this->instructions[OpCode::RET] = [&]() {
       stack_pointer--;
       program_counter = l_stack[stack_pointer];
@@ -232,34 +415,36 @@ class Chip8 {
       uint8_t regx = (opcode & 0x0F00u) >> 8u;
       uint8_t regy = (opcode & 0x00F0u) >> 4u;
 
-      m_registers[Registers::VF] = (uint8_t)(get_register_value(regx) + get_register_value(regy) > 0xFF);
-      m_registers[static_cast<Registers>(regx)] += m_registers[static_cast<Registers>(regy)];
+      uint16_t sum = get_register_value(regx) + get_register_value(regy);
+
+      m_registers[Registers::VF] = (sum > 255U);
+      m_registers[static_cast<Registers>(regx)] = sum & 0xFFu;
     };
     this->instructions[OpCode::SUB] = [&]() {
       uint8_t regx = (opcode & 0x0F00u) >> 8u;
       uint8_t regy = (opcode & 0x00F0u) >> 4u;
 
-      m_registers[Registers::VF] = (uint8_t)(get_register_value(regx) > get_register_value(regy));
+      m_registers[Registers::VF] = (get_register_value(regx) > get_register_value(regy));
 
       m_registers[static_cast<Registers>(regx)] -= m_registers[static_cast<Registers>(regy)];
     };
     this->instructions[OpCode::SHR] = [&]() {
       uint8_t regx = (opcode & 0x0F00u) >> 8u;
 
-      m_registers[Registers::VF] = get_register_value(regx) & 0x01;
+      m_registers[Registers::VF] = get_register_value(regx) & 0x1u;
       m_registers[get_register_enum(regx)] >>= 1;
     };
     this->instructions[OpCode::SUBN] = [&]() {
       uint8_t regx = (opcode & 0x0F00u) >> 8u;
       uint8_t regy = (opcode & 0x00F0u) >> 4u;
 
-      m_registers[Registers::VF] = (uint8_t)(get_register_value(regy) > get_register_value(regx));
+      m_registers[Registers::VF] = (get_register_value(regy) > get_register_value(regx));
       m_registers[get_register_enum(regx)] = m_registers[get_register_enum(regy)] - m_registers[get_register_enum(regx)];
     };
     this->instructions[OpCode::SHL] = [&]() {
       uint8_t regx = (opcode & 0x0F00u) >> 8u;
 
-      m_registers[Registers::VF] = (get_register_value(regx) & 0x80) >> 7u;
+      m_registers[Registers::VF] = (get_register_value(regx) & 0x80u) >> 7u;
       m_registers[get_register_enum(regx)] <<= 1;
     };
     this->instructions[OpCode::SNE_Vx_Vy] = [&]() {
@@ -271,7 +456,7 @@ class Chip8 {
       }
     };
     this->instructions[OpCode::LD_I] = [&]() {
-      uint8_t address = opcode & 0x0FFFu;
+      uint16_t address = opcode & 0x0FFFu;
       index_register = address;
     };
     this->instructions[OpCode::JP_Vx_addr] = [&]() {
@@ -285,21 +470,36 @@ class Chip8 {
       m_registers[get_register_enum(regx)] = dist(mt) & kk;
     };
     this->instructions[OpCode::DRW] = [&]() {
-      uint8_t regx = (opcode & 0x0F00u) >> 8u;
-      uint8_t regy = (opcode & 0x00F0u) >> 4u;
-      uint8_t n = opcode & 0x000Fu;
+      uint8_t Vx = (opcode & 0x0F00u) >> 8u;
+      uint8_t Vy = (opcode & 0x00F0u) >> 4u;
+      uint8_t height = opcode & 0x000Fu;
 
-      Vec2b start_position = Vec2b{get_register_value(regx) % DISPLAY_WIDTH, get_register_value(regy) % DISPLAY_HEIGHT};
+      // Wrap if going beyond screen boundaries
+      uint8_t xPos = m_registers[static_cast<Registers>(Vx)] % DISPLAY_WIDTH;
+      uint8_t yPos = m_registers[static_cast<Registers>(Vy)] % DISPLAY_HEIGHT;
+
       m_registers[Registers::VF] = 0;
-      for (int i = 0; i < n; i++) {
-        uint8_t sprite_byte_1 = memory[index_register + i];
 
-        for (int j = 0; j < 8; j++) {
-          if (sprite_byte_1 & (1 << j)) {
-            if (display[start_position.x + j][start_position.y + i]) {
+      for (unsigned int row = 0; row < height; ++row)
+      {
+        uint8_t spriteByte = memory[index_register + row];
+
+        for (unsigned int col = 0; col < 8; ++col)
+        {
+          uint8_t spritePixel = spriteByte & (0x80u >> col);
+          uint32_t* screenPixel = &display[(yPos + row) * DISPLAY_WIDTH + (xPos + col)];
+
+          // Sprite pixel is on
+          if (spritePixel)
+          {
+            // Screen pixel also on - collision
+            if (*screenPixel == 0xFFFFFFFF)
+            {
               m_registers[Registers::VF] = 1;
             }
-            display[start_position.x + j][start_position.y + i] ^= 0xFFFFFFFF;
+
+            // Effectively XOR with the sprite pixel
+            *screenPixel ^= 0xFFFFFFFF;
           }
         }
       }
@@ -348,7 +548,7 @@ class Chip8 {
 
       sound_timer = m_registers[static_cast<Registers>(regx)];
     };
-    this->instructions[OpCode::ADD_Vx_Vy] = [&]() {
+    this->instructions[OpCode::ADD_I_Vx] = [&]() {
       uint8_t regx = (opcode & 0x0F00u) >> 8u;
 
       index_register += m_registers[static_cast<Registers>(regx)];
@@ -391,30 +591,34 @@ class Chip8 {
 
   inline void pg_next_instruction() { program_counter += 2; }
   inline void pg_previous_instruction() { program_counter -= 2; }
-  void load_rom() {
-    Rom rom("./res/Airplane.ch8");
+  void load_rom(std::string rom_name) {
+    Rom rom(rom_name);
     vector<uint8_t> c = rom.open_rom();
 
-    for (int i; i < c.size(); i++) {
+    for (int i = 0; i < c.size(); i++) {
       memory[START_ADDRESS + i] = c[i];
     }
-
-    cout << "Teste de final de arquivo" << endl;
   }
 
   void decode_op_code_and_execute() {
-    if (opcode > 0x00E0 && opcode < 0x00EE) {
-      instructions[static_cast<OpCode>(opcode)]();
+    uint16_t final_opcode = -1;
+    if (opcode == 0x00E0 || opcode == 0x00EE) {
+      final_opcode = opcode;
     } else if ((opcode >> 12) >= 0 && (opcode >> 12) <= 7) {
-      instructions[static_cast<OpCode>(opcode >> 12)]();
-    } else if ((opcode >> 12) >= 8 && (opcode >> 12) <= 0xD) {
-      instructions[static_cast<OpCode>(opcode & 0xF00F)]();
+      final_opcode = opcode >> 12;
+    } else if ((opcode >> 12) >= 0x8 && (opcode >> 12) <= 0x9) {
+      final_opcode = opcode & 0xF00F;
+    } else if ((opcode >> 12) >= 0xA && (opcode >> 12) < 0xE) {
+      final_opcode = opcode & 0xF000;
     } else if ((opcode >> 12) >= 0xE && (opcode >> 12) <= 0xF) {
-      instructions[static_cast<OpCode>(opcode & 0xF0FF)]();
+      final_opcode = opcode & 0xF0FF;
+    }
+    if (instructions.find(static_cast<OpCode>(final_opcode)) != instructions.end()) {
+      instructions[static_cast<OpCode>(final_opcode)]();
     }
   }
 
-  void Cicle() {
+  void Cycle() {
     opcode = (memory[program_counter] << 8u) | memory[program_counter + 1];
 
     pg_next_instruction();
@@ -432,7 +636,34 @@ class Chip8 {
 };
 
 int main(int argc, char* argv[]) {
-  Chip8 chip_8;
+  int videoScale = 10;
+  int cycleDelay = 1;
+  char const* romFilename = "./res/tetris.ch8";
 
-  chip_8.load_rom();
+  Platform platform("CHIP-8 Emulator", DISPLAY_WIDTH * videoScale, DISPLAY_HEIGHT * videoScale, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+
+  Chip8 chip8;
+  chip8.load_rom(romFilename);
+
+  int videoPitch = sizeof(chip8.display[0]) * DISPLAY_WIDTH;
+
+  auto lastCycleTime = std::chrono::high_resolution_clock::now();
+  bool quit = false;
+
+  while (!quit) {
+    quit = platform.ProcessInput(chip8.input_keys);
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float dt = std::chrono::duration<float, std::chrono::milliseconds::period>(currentTime - lastCycleTime).count();
+
+    if (dt > cycleDelay) {
+      lastCycleTime = currentTime;
+
+      chip8.Cycle();
+
+      platform.Update(chip8.display, videoPitch);
+    }
+  }
+
+  return 0;
 }
